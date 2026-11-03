@@ -12,7 +12,7 @@
             },
             "playwright": {
                 "type": "local",
-                "command": ["npx", "-y", "@playwright/mcp@latest"]
+                "command": ["npx", "-y", "@playwright/mcp@latest", "--browser", "msedge"]
             }
         }
     }

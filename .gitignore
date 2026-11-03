@@ -48,3 +48,6 @@ Thumbs.db
 
 # Ignore .key extension
 *.key
+# Artefatos do MCP do Playwright
+.playwright-mcp/
+

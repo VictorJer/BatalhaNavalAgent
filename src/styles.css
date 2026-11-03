@@ -1,0 +1,15 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-agua: #0b4f6c;
+  --color-acerto: #c2410c;
+  --color-erro: #64748b;
+  --color-navio: #334155;
+  --color-destruida: #7f1d1d;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+  }
+}
