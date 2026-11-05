@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Coordenada } from '../dominio/coordenada';
-import { Orientacao, TipoEmbarcacao } from '../dominio/embarcacao';
+import { Orientacao, TIPOS_DAS_EMBARCACOES, TipoEmbarcacao } from '../dominio/embarcacao';
 import {
   FaseDaPartida,
   Lado,
@@ -13,6 +13,7 @@ import {
   removerEmbarcacao,
 } from '../dominio/partida';
 import { ResultadoPosicionamento, embarcacaoDoTipo } from '../dominio/frota';
+import { gerarFrotaAleatoria } from '../dominio/frota-aleatoria';
 import { coordenadasNaoAtacadas, escolherAtaqueAleatorio } from '../dominio/tabuleiro';
 import { Aleatorio, ALEATORIO } from './aleatorio';
 
@@ -160,6 +161,38 @@ export class JogoStore {
     }
 
     this.escrever(partida, [{ tipo: 'embarcacao-removida', tipoEmbarcacao: tipo }]);
+    return { tipo: 'ok' };
+  }
+
+  /** Substitui a frota do jogador por uma frota completa gerada aleatoriamente. */
+  posicionarFrotaAutomaticamente(): ResultadoAcao {
+    if (this.fase() !== 'preparacao') {
+      return { tipo: 'fase-invalida', fase: this.fase() };
+    }
+
+    const partidaAtual = this.estado().partida;
+    const frotaAtual = partidaAtual.jogador.frota;
+    const frotaGerada = gerarFrotaAleatoria(this.aleatorio);
+    const partida = {
+      ...partidaAtual,
+      jogador: { ...partidaAtual.jogador, frota: frotaGerada },
+    };
+    const eventos: EventoNovo[] = [];
+
+    for (const tipo of TIPOS_DAS_EMBARCACOES) {
+      if (embarcacaoDoTipo(frotaAtual, tipo) !== null) {
+        eventos.push({ tipo: 'embarcacao-removida', tipoEmbarcacao: tipo });
+      }
+    }
+    for (const tipo of TIPOS_DAS_EMBARCACOES) {
+      eventos.push({
+        tipo: 'embarcacao-posicionada',
+        tipoEmbarcacao: tipo,
+        posicoes: posicoesDaEmbarcacao(partida, tipo),
+      });
+    }
+
+    this.escrever(partida, eventos);
     return { tipo: 'ok' };
   }
 

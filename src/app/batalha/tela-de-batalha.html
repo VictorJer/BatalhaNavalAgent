@@ -1,0 +1,76 @@
+<section class="w-full max-w-5xl space-y-5 text-left" aria-labelledby="titulo-batalha">
+  <h2 id="titulo-batalha" class="text-2xl font-semibold">Batalha</h2>
+
+  <div
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    class="space-y-3 rounded border border-slate-700 bg-slate-900 p-4"
+  >
+    @if (encerrada()) {
+      <p class="text-xl font-semibold">{{ resultadoFinal() }}</p>
+    } @else {
+      <p class="font-medium">{{ indicacaoDoTurno() }}</p>
+    }
+    <div class="grid gap-3 text-sm sm:grid-cols-2">
+      <section aria-label="Último ataque do jogador">
+        <h3 class="font-semibold">Último ataque do jogador</h3>
+        <p class="text-slate-300">{{ ultimoAtaqueDoJogador() }}</p>
+      </section>
+      <section aria-label="Último ataque do computador">
+        <h3 class="font-semibold">Último ataque do computador</h3>
+        <p class="text-slate-300">{{ ultimoAtaqueDoComputador() }}</p>
+      </section>
+    </div>
+  </div>
+
+  @if (encerrada()) {
+    <button
+      type="button"
+      class="rounded bg-acerto px-4 py-3 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      (click)="novaPartida()"
+    >
+      Nova partida
+    </button>
+  }
+
+  <div class="grid min-w-0 gap-6 lg:grid-cols-2">
+    <section class="min-w-0 space-y-3" aria-labelledby="titulo-tabuleiro-jogador">
+      <h3 id="titulo-tabuleiro-jogador" class="text-lg font-semibold">Sua frota</h3>
+      <app-tabuleiro
+        rotulo="Tabuleiro do jogador"
+        [celulas]="celulasDoJogador()"
+        [bloqueado]="true"
+      />
+    </section>
+
+    <section class="min-w-0 space-y-3" aria-labelledby="titulo-tabuleiro-computador">
+      <h3 id="titulo-tabuleiro-computador" class="text-lg font-semibold">Frota do computador</h3>
+      <app-tabuleiro
+        rotulo="Tabuleiro do computador"
+        [celulas]="celulasDoComputador()"
+        [bloqueado]="ataquesBloqueados()"
+        (celulaClicada)="atacarCoordenada($event)"
+      />
+    </section>
+  </div>
+
+  <div aria-label="Legenda dos ataques" class="space-y-2 text-sm text-slate-300">
+    <ul class="flex flex-wrap gap-x-5 gap-y-2">
+      @for (resultado of resultados; track resultado) {
+        <li class="inline-flex items-center gap-2">
+          <svg
+            [lucideIcon]="apresentacaoDosResultados[resultado].icone"
+            class="size-4 shrink-0"
+            aria-hidden="true"
+          ></svg>
+          {{ apresentacaoDosResultados[resultado].texto }}
+        </li>
+      }
+    </ul>
+    <p>
+      A marca de destruição indica o tiro final. Os acertos anteriores permanecem marcados como
+      acertos.
+    </p>
+  </div>
+</section>

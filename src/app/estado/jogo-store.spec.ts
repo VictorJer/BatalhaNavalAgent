@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { InjectionToken } from '@angular/core';
 import { Coordenada, coordenada } from '../dominio/coordenada';
-import { TipoEmbarcacao } from '../dominio/embarcacao';
+import { TIPOS_DAS_EMBARCACOES, TipoEmbarcacao } from '../dominio/embarcacao';
 import { Aleatorio, ALEATORIO } from './aleatorio';
 import { JogoStore } from './jogo-store';
 
@@ -165,6 +165,41 @@ describe('JogoStore — preparação', () => {
 
     const remocao = store.remover('cruzador');
     expect(remocao).toMatchObject({ tipo: 'fase-invalida', fase: 'batalha' });
+  });
+
+  it('gera frota completa, substitui posicionamento parcial e registra os eventos em ordem', () => {
+    const store = TestBed.inject(JogoStore);
+    store.posicionar('cruzador', coordenada(1, 1)!, 'horizontal');
+
+    const resultado = store.posicionarFrotaAutomaticamente();
+
+    expect(resultado.tipo).toBe('ok');
+    expect(Object.keys(store.frotaDoJogador())).toHaveLength(5);
+    expect(TIPOS_DAS_EMBARCACOES.every((tipo) => store.frotaDoJogador()[tipo])).toBe(true);
+    const eventos = store.historico().slice(-6);
+    expect(eventos[0]).toMatchObject({ tipo: 'embarcacao-removida', tipoEmbarcacao: 'cruzador' });
+    expect(
+      eventos
+        .slice(1)
+        .map((evento) => (evento.tipo === 'embarcacao-posicionada' ? evento.tipoEmbarcacao : null)),
+    ).toEqual(TIPOS_DAS_EMBARCACOES);
+    expect(
+      eventos
+        .slice(1)
+        .every((evento) => evento.tipo === 'embarcacao-posicionada' && evento.posicoes.length > 0),
+    ).toBe(true);
+  });
+
+  it('recusa geração automática fora da preparação sem alterar o histórico', () => {
+    const store = TestBed.inject(JogoStore);
+    posicionarFrotaCompleta(store);
+    store.iniciarBatalha();
+    const historicoAnterior = store.historico();
+
+    const resultado = store.posicionarFrotaAutomaticamente();
+
+    expect(resultado).toEqual({ tipo: 'fase-invalida', fase: 'batalha' });
+    expect(store.historico()).toBe(historicoAnterior);
   });
 
   it('recusa iniciar batalha com frota incompleta e mantém a fase', () => {
