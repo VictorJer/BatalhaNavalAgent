@@ -58,6 +58,63 @@ describe('App', () => {
     expect(compilado.querySelector('app-tela-de-batalha')).toBeTruthy();
     expect(compilado.querySelector('[aria-label="Tabuleiro do computador"]')).toBeTruthy();
     expect(compilado.querySelector('[role="status"]')?.textContent).toContain('Sua vez.');
+    for (const grade of compilado.querySelectorAll('[role="grid"]')) {
+      expect(grade.querySelectorAll('[aria-hidden="true"]')).toHaveLength(0);
+    }
+  });
+
+  it('preserva o fluxo de preparação por clique e mantém a apresentação nova só nessa fase', async () => {
+    const fixture = TestBed.createComponent(App);
+    const jogo = TestBed.inject(JogoStore);
+    await fixture.whenStable();
+    const compilado = fixture.nativeElement as HTMLElement;
+    const botoes = () => [...compilado.querySelectorAll<HTMLButtonElement>('button')];
+    const porTexto = (texto: string) =>
+      botoes().find((botao) => botao.textContent?.includes(texto))!;
+
+    const tabuleiro = compilado.querySelector('[aria-label="Tabuleiro do jogador"]')!;
+    expect(tabuleiro.querySelectorAll('[role="gridcell"]')).toHaveLength(100);
+    expect(tabuleiro.querySelectorAll('[aria-hidden="true"]')).toHaveLength(21);
+    expect(compilado.querySelector('[role="status"]')?.textContent).toContain(
+      'Selecione uma embarcação',
+    );
+
+    porTexto('Cruzador (CR)').click();
+    await fixture.whenStable();
+    porTexto('Alternar orientação').click();
+    await fixture.whenStable();
+    expect(compilado.querySelector('[role="status"]')?.textContent).toContain(
+      'orientação vertical',
+    );
+    const b3 = tabuleiro.querySelector<HTMLButtonElement>('[aria-label="B3"]')!;
+    b3.click();
+    await fixture.whenStable();
+    expect(jogo.frotaDoJogador()['cruzador']?.posicoes).toEqual(['B3', 'C3', 'D3']);
+    expect(compilado.textContent).toContain('1 de 5 embarcações posicionadas');
+
+    porTexto('Cruzador (CR)').click();
+    await fixture.whenStable();
+    expect(jogo.frotaDoJogador()['cruzador']).toBeUndefined();
+    expect(compilado.textContent).toContain('0 de 5 embarcações posicionadas');
+    porTexto('Gerar frota automaticamente').click();
+    await fixture.whenStable();
+    expect(jogo.frotaDoJogador()).toEqual(
+      expect.objectContaining({
+        'porta-avioes': expect.anything(),
+        encouracado: expect.anything(),
+        cruzador: expect.anything(),
+        submarino: expect.anything(),
+        destroyer: expect.anything(),
+      }),
+    );
+    porTexto('Iniciar batalha').click();
+    await fixture.whenStable();
+    expect(jogo.fase()).toBe('batalha');
+    expect(compilado.querySelectorAll('[role="grid"]')).toHaveLength(2);
+    expect(compilado.querySelectorAll('[role="grid"] [aria-hidden="true"]')).toHaveLength(0);
+    expect(
+      compilado.querySelector('[aria-label="Tabuleiro do computador"]')?.textContent?.trim(),
+    ).toBe('');
   });
 
   it('percorre preparação, batalha, encerramento, reinício e nova batalha sem marcas antigas', async () => {

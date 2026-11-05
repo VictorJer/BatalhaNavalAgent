@@ -10,14 +10,24 @@ import { EstadoDaCelula, Tabuleiro } from './tabuleiro';
     [celulas]="celulas"
     [rotulo]="rotulo"
     [bloqueado]="bloqueado"
+    [mostrarCoordenadas]="mostrarCoordenadas"
+    [mostrarEmbarcacoes]="mostrarEmbarcacoes"
     (celulaClicada)="clique = $event"
+    (apontamentoEncerrado)="encerrarApontamento()"
   />`,
 })
 class HospedeiroDoTabuleiro {
   celulas: Readonly<Record<string, EstadoDaCelula>> = {};
   rotulo = 'Tabuleiro do jogador';
   bloqueado = false;
+  mostrarCoordenadas = false;
+  mostrarEmbarcacoes = false;
   clique = '';
+  apontamentosEncerrados = 0;
+
+  encerrarApontamento(): void {
+    this.apontamentosEncerrados += 1;
+  }
 }
 
 describe('Tabuleiro', () => {
@@ -35,6 +45,95 @@ describe('Tabuleiro', () => {
 
     expect(celulas).toHaveLength(100);
     expect(celulas[11].getAttribute('aria-label')).toBe('B2');
+  });
+
+  it('mostra cabeçalhos informativos sem adicionar alvos ou deslocar coordenadas', async () => {
+    const fixture = TestBed.createComponent(HospedeiroDoTabuleiro);
+    fixture.componentInstance.mostrarCoordenadas = true;
+    await fixture.whenStable();
+    const compilado = fixture.nativeElement as HTMLElement;
+    const rotulos = [...compilado.querySelectorAll('[aria-hidden="true"]')].map((el) =>
+      el.textContent?.trim(),
+    );
+    const celulas = compilado.querySelectorAll<HTMLButtonElement>('[role="gridcell"]');
+
+    expect(celulas).toHaveLength(100);
+    expect(rotulos.filter((rotulo) => /^[A-J]$/.test(rotulo ?? ''))).toEqual([...'ABCDEFGHIJ']);
+    expect(rotulos.filter((rotulo) => /^(10|[1-9])$/.test(rotulo ?? ''))).toEqual(
+      Array.from({ length: 10 }, (_, indice) => String(indice + 1)),
+    );
+    expect(compilado.querySelector('[aria-label="A1"]')).toBe(celulas[0]);
+    expect(compilado.querySelector('[aria-label="B3"]')).toBe(celulas[12]);
+    expect(compilado.querySelector('[aria-label="J10"]')).toBe(celulas[99]);
+    expect(compilado.querySelectorAll('span[tabindex]')).toHaveLength(0);
+  });
+
+  it('não mostra cabeçalhos por padrão', async () => {
+    const fixture = TestBed.createComponent(HospedeiroDoTabuleiro);
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelectorAll('[aria-hidden="true"]')).toHaveLength(0);
+    expect(fixture.nativeElement.querySelectorAll('[role="gridcell"]')).toHaveLength(100);
+  });
+
+  it('identifica barcos por sigla e descrição sem alterar coordenadas nem alvos', async () => {
+    const fixture = TestBed.createComponent(HospedeiroDoTabuleiro);
+    fixture.componentInstance.mostrarEmbarcacoes = true;
+    fixture.componentInstance.celulas = {
+      A1: { embarcacao: 'porta-avioes' },
+      A2: { embarcacao: 'encouracado' },
+      A3: { embarcacao: 'cruzador' },
+      A4: { embarcacao: 'submarino' },
+      A5: { embarcacao: 'destroyer' },
+      A6: { resultado: 'acerto', embarcacao: 'destroyer' },
+    };
+    await fixture.whenStable();
+    const compilado = fixture.nativeElement as HTMLElement;
+    const esperados = [
+      ['A1', 'PA', 'Porta-aviões, 5 posições'],
+      ['A2', 'EN', 'Encouraçado, 4 posições'],
+      ['A3', 'CR', 'Cruzador, 3 posições'],
+      ['A4', 'SU', 'Submarino, 3 posições'],
+      ['A5', 'DE', 'Destroyer, 2 posições'],
+    ];
+
+    for (const [coordenada, sigla, descricao] of esperados) {
+      const celula = compilado.querySelector<HTMLButtonElement>(`[aria-label="${coordenada}"]`)!;
+      expect(celula.textContent?.trim()).toBe(sigla);
+      expect(celula.getAttribute('aria-description')).toBe(descricao);
+    }
+    expect(compilado.querySelectorAll('[role="gridcell"]')).toHaveLength(100);
+    expect(compilado.querySelector('[aria-label="A6, Acerto"]')?.textContent?.trim()).toBe('');
+    expect(compilado.querySelector('[aria-label="A7"]')?.hasAttribute('aria-description')).toBe(
+      false,
+    );
+  });
+
+  it('não mostra siglas quando a identificação está desativada', async () => {
+    const fixture = TestBed.createComponent(HospedeiroDoTabuleiro);
+    fixture.componentInstance.celulas = { A1: { embarcacao: 'porta-avioes' } };
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('[aria-label="A1"]')?.textContent?.trim()).toBe('');
+    expect(
+      fixture.nativeElement.querySelector('[aria-label="A1"]')?.hasAttribute('aria-description'),
+    ).toBe(false);
+  });
+
+  it('encerra apontamento ao sair do ponteiro ou do foco, mas não entre células', async () => {
+    const fixture = TestBed.createComponent(HospedeiroDoTabuleiro);
+    await fixture.whenStable();
+    const grade = fixture.nativeElement.querySelector('[role="grid"]') as HTMLElement;
+    const primeira = fixture.nativeElement.querySelector('[aria-label="A1"]') as HTMLButtonElement;
+    const segunda = fixture.nativeElement.querySelector('[aria-label="A2"]') as HTMLButtonElement;
+    const externa = document.createElement('button');
+
+    segunda.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: primeira }));
+    expect(fixture.componentInstance.apontamentosEncerrados).toBe(0);
+    segunda.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: externa }));
+    expect(fixture.componentInstance.apontamentosEncerrados).toBe(1);
+    grade.dispatchEvent(new MouseEvent('mouseleave'));
+    expect(fixture.componentInstance.apontamentosEncerrados).toBe(2);
   });
 
   it('emite o clique e apresenta o estado de preview da coordenada', async () => {
@@ -92,6 +191,7 @@ describe('Tabuleiro', () => {
       A2: { resultado: 'acerto', embarcacao: 'destroyer' },
       A3: { resultado: 'destruida', embarcacao: 'destroyer' },
     };
+    fixture.componentInstance.mostrarEmbarcacoes = true;
     await fixture.whenStable();
     const compilado = fixture.nativeElement as HTMLElement;
     const agua = compilado.querySelector('[aria-label="A1, Água"]')!;

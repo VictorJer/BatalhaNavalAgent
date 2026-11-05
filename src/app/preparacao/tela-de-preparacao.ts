@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Coordenada } from '../dominio/coordenada';
+import { Coordenada, colunaDe, coordenada, linhaDe } from '../dominio/coordenada';
 import {
   Embarcacao,
   Orientacao,
@@ -11,26 +11,23 @@ import {
 import { estaCompleta, posicoesOcupadas } from '../dominio/frota';
 import { JogoStore } from '../estado/jogo-store';
 import { EstadoDaCelula, Tabuleiro } from './tabuleiro';
-
-const NOMES_DAS_EMBARCACOES: Readonly<Record<TipoEmbarcacao, string>> = {
-  'porta-avioes': 'Porta-aviões',
-  encouracado: 'Encouraçado',
-  cruzador: 'Cruzador',
-  submarino: 'Submarino',
-  destroyer: 'Destroyer',
-};
+import { APRESENTACAO_DAS_EMBARCACOES, nomeDaEmbarcacao } from './apresentacao-das-embarcacoes';
 
 @Component({
   selector: 'app-tela-de-preparacao',
   imports: [Tabuleiro],
+  host: { class: 'block w-full max-w-5xl min-w-0' },
   template: `
     <section class="w-full max-w-5xl text-left" aria-labelledby="titulo-preparacao">
       <h2 id="titulo-preparacao" class="mb-4 text-2xl font-semibold">Preparação da frota</h2>
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <app-tabuleiro
           [celulas]="estadoDasCelulas()"
+          [mostrarCoordenadas]="true"
+          [mostrarEmbarcacoes]="true"
           (celulaClicada)="posicionarNaCelula($event)"
           (celulaApontada)="celulaApontada.set($event)"
+          (apontamentoEncerrado)="celulaApontada.set(null)"
         />
         <aside class="space-y-4" aria-label="Controles da frota">
           <div>
@@ -49,10 +46,25 @@ const NOMES_DAS_EMBARCACOES: Readonly<Record<TipoEmbarcacao, string>> = {
                     "
                     (click)="selecionar(tipo)"
                   >
-                    <span>{{ nomeDaEmbarcacao(tipo) }}</span>
-                    <span class="text-sm text-slate-300">{{
-                      frota()[tipo] ? 'Posicionada' : 'Pendente'
-                    }}</span>
+                    <span class="min-w-0">
+                      <span class="block font-medium"
+                        >{{ nomeDaEmbarcacao(tipo) }} ({{ siglaDaEmbarcacao(tipo) }})</span
+                      >
+                      <span class="block text-sm text-slate-300"
+                        >{{ tamanhoDe(tipo) }} posições</span
+                      >
+                      <span class="flex gap-1 pt-1" aria-hidden="true">
+                        @for (segmento of segmentos(tipo); track $index) {
+                          <span class="h-2 w-3 rounded-sm border border-slate-300"></span>
+                        }
+                      </span>
+                    </span>
+                    <span class="shrink-0 text-right text-sm text-slate-300">
+                      <span class="block">{{ frota()[tipo] ? 'Posicionada' : 'Pendente' }}</span>
+                      @if (selecionada() === tipo) {
+                        <span class="block font-semibold text-white">Selecionada</span>
+                      }
+                    </span>
                   </button>
                 </li>
               }
@@ -62,9 +74,19 @@ const NOMES_DAS_EMBARCACOES: Readonly<Record<TipoEmbarcacao, string>> = {
             </p>
           </div>
 
-          <p>
-            Orientação:
-            <strong>{{ orientacao() === 'horizontal' ? 'Horizontal' : 'Vertical' }}</strong>
+          <p role="status" aria-live="polite" class="rounded border border-slate-600 p-3">
+            @if (selecionada(); as tipo) {
+              {{ nomeDaEmbarcacao(tipo) }}, {{ tamanhoDe(tipo) }} posições, orientação
+              {{ orientacao() }}.
+              @if (celulaApontada(); as coordenada) {
+                Coordenada {{ coordenada }}.
+              }
+              @if (explicacaoDaPrevia(); as explicacao) {
+                {{ explicacao }}
+              }
+            } @else {
+              Selecione uma embarcação e depois uma célula do tabuleiro.
+            }
           </p>
           <button
             type="button"
@@ -113,6 +135,30 @@ export class TelaDePreparacao {
   protected readonly quantidadePosicionada = computed(() => Object.keys(this.frota()).length);
   protected readonly frotaCompleta = computed(() => estaCompleta(this.frota()));
 
+  protected readonly encaixe = computed(() => {
+    const tipo = this.selecionada();
+    const origem = this.celulaApontada();
+    if (tipo === null || origem === null) return null;
+
+    const posicoes = posicoesDe(origem, this.orientacao(), tamanhoDe(tipo));
+    const ocupadas = new Set(posicoesOcupadas({ ...this.frota(), [tipo]: undefined }));
+    const motivo =
+      posicoes === null
+        ? 'fora-do-tabuleiro'
+        : posicoes.some((posicao) => ocupadas.has(posicao))
+          ? 'sobreposicao'
+          : null;
+    const posicoesVisiveis = posicoes ?? this.recortarPosicoesDaTentativa(origem, tamanhoDe(tipo));
+    const explicacao =
+      motivo === 'fora-do-tabuleiro'
+        ? 'A embarcação não cabe nessa posição.'
+        : motivo === 'sobreposicao'
+          ? this.explicacaoDaSobreposicao(posicoes ?? [], tipo)
+          : 'Encaixe válido.';
+
+    return { tipo, posicoes: posicoesVisiveis, valido: motivo === null, motivo, explicacao };
+  });
+
   protected readonly estadoDasCelulas = computed<Readonly<Record<string, EstadoDaCelula>>>(() => {
     const celulas: Record<string, EstadoDaCelula> = {};
     for (const tipo of this.tipos) {
@@ -122,22 +168,61 @@ export class TelaDePreparacao {
       });
     }
 
-    const tipo = this.selecionada();
-    const origem = this.celulaApontada();
-    if (tipo !== null && origem !== null) {
-      const posicoes = posicoesDe(origem, this.orientacao(), tamanhoDe(tipo));
-      const ocupadas = new Set(posicoesOcupadas({ ...this.frota(), [tipo]: undefined }));
-      const valido = posicoes !== null && posicoes.every((posicao) => !ocupadas.has(posicao));
-      const preview = valido ? 'valido' : 'invalido';
-      (posicoes ?? [origem]).forEach((posicao) => {
-        celulas[posicao] = { ...celulas[posicao], preview };
-      });
-    }
+    const encaixe = this.encaixe();
+    encaixe?.posicoes.forEach((posicao) => {
+      celulas[posicao] = {
+        ...celulas[posicao],
+        preview: encaixe.valido ? 'valido' : 'invalido',
+        descricaoPreview: encaixe.explicacao,
+      };
+    });
     return celulas;
   });
 
+  protected explicacaoDaPrevia(): string | null {
+    return this.encaixe()?.explicacao ?? null;
+  }
+
+  private recortarPosicoesDaTentativa(origem: Coordenada, tamanho: number): Coordenada[] {
+    const linhaInicial = linhaDe(origem);
+    const colunaInicial = colunaDe(origem);
+    return Array.from({ length: tamanho }, (_, avancar) =>
+      coordenada(
+        this.orientacao() === 'vertical' ? linhaInicial + avancar : linhaInicial,
+        this.orientacao() === 'horizontal' ? colunaInicial + avancar : colunaInicial,
+      ),
+    ).filter((posicao): posicao is Coordenada => posicao !== null);
+  }
+
+  private explicacaoDaSobreposicao(
+    posicoes: readonly Coordenada[],
+    selecionada: TipoEmbarcacao,
+  ): string {
+    for (const tipo of this.tipos) {
+      if (
+        tipo !== selecionada &&
+        this.frota()[tipo]?.posicoes.some((posicao) => posicoes.includes(posicao))
+      ) {
+        return `A posição sobrepõe a embarcação ${this.nomeDaEmbarcacao(tipo)}.`;
+      }
+    }
+    return 'A posição sobrepõe outra embarcação.';
+  }
+
   protected nomeDaEmbarcacao(tipo: TipoEmbarcacao): string {
-    return NOMES_DAS_EMBARCACOES[tipo];
+    return nomeDaEmbarcacao(tipo);
+  }
+
+  protected siglaDaEmbarcacao(tipo: TipoEmbarcacao): string {
+    return APRESENTACAO_DAS_EMBARCACOES[tipo].sigla;
+  }
+
+  protected segmentos(tipo: TipoEmbarcacao): number[] {
+    return Array.from({ length: tamanhoDe(tipo) }, (_, indice) => indice);
+  }
+
+  protected tamanhoDe(tipo: TipoEmbarcacao): number {
+    return tamanhoDe(tipo);
   }
 
   protected selecionar(tipo: TipoEmbarcacao): void {
@@ -147,6 +232,7 @@ export class TelaDePreparacao {
     }
     this.selecionada.set(tipo);
     this.orientacao.set('horizontal');
+    this.celulaApontada.set(null);
     this.mensagemDeRecusa.set(null);
   }
 
@@ -163,6 +249,7 @@ export class TelaDePreparacao {
     const resultado = this.jogo.posicionar(tipo, origem, this.orientacao());
     if (resultado.tipo === 'ok') {
       this.selecionada.set(null);
+      this.celulaApontada.set(null);
       this.mensagemDeRecusa.set(null);
       return;
     }
@@ -181,6 +268,7 @@ export class TelaDePreparacao {
     const resultado = this.jogo.posicionarFrotaAutomaticamente();
     if (resultado.tipo === 'ok') {
       this.selecionada.set(null);
+      this.celulaApontada.set(null);
       this.mensagemDeRecusa.set(null);
     }
   }

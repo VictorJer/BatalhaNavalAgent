@@ -96,6 +96,12 @@ describe('TelaDeBatalha', () => {
     expect(tabuleiro(fixture, 'jogador').querySelectorAll('.bg-navio')).toHaveLength(17);
     expect(tabuleiro(fixture, 'computador').querySelector('.bg-navio')).toBeNull();
     expect(tabuleiro(fixture, 'computador').querySelector('svg')).toBeNull();
+    expect(tabuleiro(fixture, 'jogador').querySelectorAll('[aria-hidden="true"]')).toHaveLength(0);
+    expect(tabuleiro(fixture, 'computador').querySelectorAll('[aria-hidden="true"]')).toHaveLength(
+      0,
+    );
+    expect(tabuleiro(fixture, 'jogador').textContent?.trim()).toBe('');
+    expect(tabuleiro(fixture, 'computador').textContent?.trim()).toBe('');
     const adversarias = [
       ...tabuleiro(fixture, 'computador').querySelectorAll<HTMLButtonElement>('button'),
     ];
@@ -123,6 +129,7 @@ describe('TelaDeBatalha', () => {
     expect(celula(fixture, 'computador', 'A1').getAttribute('aria-label')).toBe('A1, Acerto');
     expect(celula(fixture, 'computador', 'A1').disabled).toBe(true);
     expect(celula(fixture, 'jogador', 'J10').getAttribute('aria-label')).toBe('J10, Água');
+    expect(celula(fixture, 'jogador', 'J10').querySelector('svg')).toBeTruthy();
     expect(celula(fixture, 'computador', 'A2').getAttribute('aria-label')).toBe('A2');
     expect(celula(fixture, 'computador', 'A2').classList.contains('bg-navio')).toBe(false);
     expect(celula(fixture, 'computador', 'A2').querySelector('svg')).toBeNull();
