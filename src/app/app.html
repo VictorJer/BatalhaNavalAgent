@@ -4,12 +4,14 @@
     {{ titulo() }}
   </h1>
 
-  @if (fase() === 'preparacao') {
+  @if (fase() !== 'preparacao') {
+    <app-tela-de-batalha />
+  } @else if (apresentacaoPendente()) {
+    <app-tela-inicial (iniciar)="comecarAJogar()" />
+  } @else {
     <p class="max-w-prose text-base text-slate-300 sm:text-lg">
       Posicione sua frota e destrua a esquadra inimiga antes que a sua seja afundada.
     </p>
     <app-tela-de-preparacao />
-  } @else {
-    <app-tela-de-batalha />
   }
 </main>

@@ -37,13 +37,16 @@ describe('App', () => {
     expect(compilado.querySelector('h1')?.textContent).toContain('Batalha Naval');
   });
 
-  it('exibe a tela de preparação na fase inicial', async () => {
+  it('exibe a apresentação sem controles de preparação ou batalha na primeira abertura', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compilado = fixture.nativeElement as HTMLElement;
 
-    expect(compilado.querySelector('app-tela-de-preparacao')).toBeTruthy();
-    expect(compilado.querySelector('[aria-label="Tabuleiro do jogador"]')).toBeTruthy();
+    expect(compilado.querySelector('app-tela-inicial')).toBeTruthy();
+    expect(compilado.querySelector('app-tela-de-preparacao')).toBeNull();
+    expect(compilado.querySelector('app-tela-de-batalha')).toBeNull();
+    expect(compilado.querySelector('[aria-label="Controles da frota"]')).toBeNull();
+    expect(compilado.querySelector('[role="grid"]')).toBeNull();
   });
 
   it('exibe a batalha e oculta a preparação fora da fase inicial', async () => {
@@ -71,6 +74,20 @@ describe('App', () => {
     const botoes = () => [...compilado.querySelectorAll<HTMLButtonElement>('button')];
     const porTexto = (texto: string) =>
       botoes().find((botao) => botao.textContent?.includes(texto))!;
+
+    expect(jogo.fase()).toBe('preparacao');
+    expect(jogo.historico()).toEqual([{ sequencia: 1, tipo: 'partida-iniciada' }]);
+    expect(jogo.frotaDoJogador()).toEqual({});
+    expect(jogo.ataquesNoJogador()).toEqual(new Set());
+    porTexto('Começar a jogar').click();
+    await fixture.whenStable();
+    expect(compilado.querySelector('app-tela-inicial')).toBeNull();
+    expect(compilado.querySelector('app-tela-de-preparacao')).toBeTruthy();
+    expect(jogo.fase()).toBe('preparacao');
+    expect(jogo.historico()).toEqual([{ sequencia: 1, tipo: 'partida-iniciada' }]);
+    expect(jogo.frotaDoJogador()).toEqual({});
+    expect(jogo.ataquesNoJogador()).toEqual(new Set());
+    expect(compilado.textContent).toContain('0 de 5 embarcações posicionadas');
 
     const tabuleiro = compilado.querySelector('[aria-label="Tabuleiro do jogador"]')!;
     expect(tabuleiro.querySelectorAll('[role="gridcell"]')).toHaveLength(100);
@@ -127,6 +144,9 @@ describe('App', () => {
         botao.textContent?.includes(texto),
       )!;
 
+    botaoComTexto('Começar a jogar').click();
+    await fixture.whenStable();
+
     TIPOS_DAS_EMBARCACOES.forEach((tipo, indice) => {
       expect(jogo.posicionar(tipo, coordenada(indice * 2, 0)!, 'horizontal').tipo).toBe('ok');
     });
@@ -157,6 +177,7 @@ describe('App', () => {
     await fixture.whenStable();
     expect(jogo.fase()).toBe('preparacao');
     expect(compilado.querySelector('app-tela-de-batalha')).toBeNull();
+    expect(compilado.querySelector('app-tela-inicial')).toBeNull();
     expect(compilado.querySelector('app-tela-de-preparacao')?.textContent).toContain(
       '0 de 5 embarcações posicionadas',
     );
